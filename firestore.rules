@@ -1,0 +1,287 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Shared primitives
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isBootstrappedAdminEmail() {
+      return isVerifiedUser() && request.auth.token.email == 'pushpendra.rawat2025@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdminEmail() || (
+        isVerifiedUser() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidSizePrices(sp) {
+      return sp is map
+        && sp.keys().hasAll(['S', 'M', 'L', 'XL'])
+        && sp.keys().hasOnly(['S', 'M', 'L', 'XL'])
+        && sp.S is number && sp.S > 0 && sp.S <= 5000
+        && sp.M is number && sp.M > 0 && sp.M <= 5000
+        && sp.L is number && sp.L > 0 && sp.L <= 5000
+        && sp.XL is number && sp.XL > 0 && sp.XL <= 5000;
+    }
+
+    // Entity validators
+    function isValidMenuItem(data) {
+      return data.keys().hasAll([
+          'id', 'name', 'category', 'description', 'price',
+          'imageUrl', 'available', 'prepTimeMins', 'calories',
+          'caffeineMg', 'featured', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'name', 'category', 'description', 'price', 'sizePrices',
+          'imageUrl', 'available', 'prepTimeMins', 'calories',
+          'caffeineMg', 'featured', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && data.name is string && data.name.size() >= 2 && data.name.size() <= 80
+        && data.category in [
+          'Shakes', 'Hot Beverages', 'Mocktails & Mojitos',
+          'Maggi', 'Pasta & Eggs', 'Rolls', 'Paratha',
+          'Sandwich', 'Kurkuria Sandwich'
+        ]
+        && data.description is string && data.description.size() >= 4 && data.description.size() <= 240
+        && data.price is number && data.price > 0 && data.price <= 5000
+        && (!('sizePrices' in data) || isValidSizePrices(data.sizePrices))
+        && data.imageUrl is string && data.imageUrl.size() >= 1 && data.imageUrl.size() <= 300
+        && data.available is bool
+        && data.prepTimeMins is number && data.prepTimeMins >= 1 && data.prepTimeMins <= 60
+        && data.calories is number && data.calories >= 0 && data.calories <= 2000
+        && data.caffeineMg is number && data.caffeineMg >= 0 && data.caffeineMg <= 500
+        && data.featured is bool
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserProfile(data) {
+      return data.keys().hasAll([
+          'uid', 'displayName', 'email', 'phone', 'deliveryAddress',
+          'pushOptIn', 'defaultMilk', 'defaultSweetness', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'uid', 'displayName', 'email', 'phone', 'deliveryAddress',
+          'pushOptIn', 'defaultMilk', 'defaultSweetness', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 120
+        && data.phone is string && data.phone.size() <= 24
+        && data.deliveryAddress is string && data.deliveryAddress.size() <= 240
+        && data.pushOptIn is bool
+        && data.defaultMilk in ['Whole Dairy', 'Oat Milk', 'Almond Milk', 'Soy Milk']
+        && data.defaultSweetness in ['Regular', 'Less Sugar', 'Sugar Free']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidOrder(data) {
+      return data.keys().hasAll([
+          'orderNumber', 'userId', 'customerName', 'customerPhone',
+          'deliveryType', 'deliveryAddress', 'items', 'subtotal',
+          'tax', 'deliveryFee', 'totalAmount', 'paymentMethod',
+          'paymentStatus', 'paymentReference', 'status',
+          'estimatedMinutes', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'orderNumber', 'userId', 'customerName', 'customerPhone',
+          'deliveryType', 'deliveryAddress', 'items', 'subtotal',
+          'tax', 'deliveryFee', 'totalAmount', 'paymentMethod',
+          'paymentStatus', 'paymentReference', 'status',
+          'estimatedMinutes', 'notes', 'createdAt', 'updatedAt'
+        ])
+        && data.orderNumber is string && data.orderNumber.size() >= 4 && data.orderNumber.size() <= 24
+        && isValidId(data.userId)
+        && data.customerName is string && data.customerName.size() >= 1 && data.customerName.size() <= 80
+        && data.customerPhone is string && data.customerPhone.size() >= 5 && data.customerPhone.size() <= 24
+        && data.deliveryType in ['Delivery', 'Depot Pickup']
+        && data.deliveryAddress is string && data.deliveryAddress.size() <= 240
+        && data.items is list && data.items.size() >= 1 && data.items.size() <= 20
+        && data.items[0] is map
+        && data.items[0].keys().hasAll(['itemId', 'name', 'price', 'quantity'])
+        && data.items[0].itemId is string && data.items[0].itemId.size() >= 1 && data.items[0].itemId.size() <= 128
+        && data.items[0].name is string && data.items[0].name.size() >= 1 && data.items[0].name.size() <= 100
+        && data.items[0].price is number && data.items[0].price > 0 && data.items[0].price <= 5000
+        && data.items[0].quantity is number && data.items[0].quantity >= 1 && data.items[0].quantity <= 25
+        && data.subtotal is number && data.subtotal >= 1 && data.subtotal <= 50000
+        && data.tax is number && data.tax >= 0 && data.tax <= 10000
+        && data.deliveryFee is number && data.deliveryFee >= 0 && data.deliveryFee <= 500
+        && data.totalAmount is number && data.totalAmount >= 1 && data.totalAmount <= 60000
+        && data.paymentMethod in ['Razorpay', 'Stripe', 'UPI', 'Card', 'Wallet', 'Cash on Delivery']
+        && data.paymentStatus in ['Paid', 'Pending COD']
+        && data.paymentReference is string && data.paymentReference.size() >= 4 && data.paymentReference.size() <= 96
+        && data.status in ['Placed', 'Brewing', 'Quality Check', 'Out for Delivery', 'Delivered', 'Cancelled']
+        && data.estimatedMinutes is number && data.estimatedMinutes >= 1 && data.estimatedMinutes <= 120
+        && data.notes is string && data.notes.size() <= 200
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotification(data) {
+      return data.keys().hasAll([
+          'id', 'userId', 'orderId', 'title', 'message', 'type', 'read', 'createdAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'userId', 'orderId', 'title', 'message', 'type', 'read', 'createdAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && data.orderId is string && data.orderId.size() >= 1 && data.orderId.size() <= 128
+        && data.title is string && data.title.size() >= 1 && data.title.size() <= 100
+        && data.message is string && data.message.size() >= 1 && data.message.size() <= 240
+        && data.type in ['order_placed', 'status_update', 'promo']
+        && data.read is bool
+        && data.createdAt is timestamp;
+    }
+
+    // Connection test endpoint
+    match /test/connection {
+      allow get: if true;
+    }
+
+    // Storefront dynamic menu
+    match /menuItems/{itemId} {
+      allow get: if isValidId(itemId);
+      allow list: if true;
+      allow create: if isAdmin()
+        && isValidId(itemId)
+        && isValidMenuItem(incoming())
+        && incoming().id == itemId
+        && incoming().updatedAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(itemId)
+        && isValidMenuItem(incoming())
+        && incoming().id == existing().id
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'name', 'category', 'description', 'price', 'sizePrices', 'imageUrl',
+          'available', 'prepTimeMins', 'calories', 'caffeineMg', 'featured', 'updatedAt'
+        ])
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(itemId);
+    }
+
+    // Private customer profiles (strict PII isolation)
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if false;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserProfile(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserProfile(incoming())
+        && (isOwner(userId) || isAdmin())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'displayName', 'phone', 'deliveryAddress', 'pushOptIn',
+          'defaultMilk', 'defaultSweetness', 'updatedAt'
+        ]);
+      allow delete: if false;
+
+      // User real-time notification inbox (Master Gate via userId ownership, O(1) list)
+      match /notifications/{notificationId} {
+        allow get: if isValidId(userId) && isValidId(notificationId) && (isOwner(userId) || isAdmin());
+        allow list: if isValidId(userId) && (isOwner(userId) || isBootstrappedAdminEmail());
+        allow create: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(notificationId)
+          && exists(/databases/$(database)/documents/users/$(userId))
+          && (isOwner(userId) || isAdmin())
+          && isValidNotification(incoming())
+          && incoming().id == notificationId
+          && incoming().userId == userId
+          && incoming().createdAt == request.time;
+        allow update: if isVerifiedUser()
+          && isValidId(userId)
+          && isValidId(notificationId)
+          && isOwner(userId)
+          && isValidNotification(incoming())
+          && incoming().id == existing().id
+          && incoming().userId == existing().userId
+          && incoming().createdAt == existing().createdAt
+          && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+        allow delete: if isValidId(userId) && isValidId(notificationId) && (isOwner(userId) || isAdmin());
+      }
+    }
+
+    // Orders & Real-Time Tracking (O(1) list with no get()/exists())
+    match /orders/{orderId} {
+      allow get: if isValidId(orderId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
+      allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdminEmail());
+      allow create: if isVerifiedUser()
+        && isValidId(orderId)
+        && isValidOrder(incoming())
+        && incoming().userId == request.auth.uid
+        && incoming().status == 'Placed'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(orderId)
+        && isValidOrder(incoming())
+        && incoming().userId == existing().userId
+        && incoming().orderNumber == existing().orderNumber
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          // Action 1: Admin / Kitchen advances order state or adjusts ETA / COD settlement
+          (
+            isAdmin()
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'status', 'estimatedMinutes', 'paymentStatus', 'updatedAt'
+            ])
+          )
+          ||
+          // Action 2: Customer cancels only while status is still 'Placed' (non-terminal)
+          (
+            existing().userId == request.auth.uid
+            && existing().status == 'Placed'
+            && incoming().status == 'Cancelled'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+      allow delete: if false;
+    }
+
+    // Admin role marker registry
+    match /admins/{adminId} {
+      allow get: if isValidId(adminId) && isSignedIn() && (request.auth.uid == adminId || isAdmin());
+      allow list, create, update, delete: if false;
+    }
+  }
+}

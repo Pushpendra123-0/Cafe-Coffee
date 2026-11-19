@@ -1,0 +1,350 @@
+{
+  "entities": {
+    "MenuItem": {
+      "title": "MenuItem",
+      "description": "A beverage or food item offered by Suman Cold Coffee Depot with optional S/M/L/XL size pricing.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 80
+        },
+        "category": {
+          "type": "string",
+          "enum": [
+            "Shakes",
+            "Hot Beverages",
+            "Mocktails & Mojitos",
+            "Maggi",
+            "Pasta & Eggs",
+            "Rolls",
+            "Paratha",
+            "Sandwich",
+            "Kurkuria Sandwich"
+          ]
+        },
+        "description": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 240
+        },
+        "price": {
+          "type": "number"
+        },
+        "sizePrices": {
+          "type": "object"
+        },
+        "imageUrl": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 300
+        },
+        "available": {
+          "type": "boolean"
+        },
+        "prepTimeMins": {
+          "type": "number"
+        },
+        "calories": {
+          "type": "number"
+        },
+        "caffeineMg": {
+          "type": "number"
+        },
+        "featured": {
+          "type": "boolean"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "category",
+        "description",
+        "price",
+        "imageUrl",
+        "available",
+        "prepTimeMins",
+        "calories",
+        "caffeineMg",
+        "featured",
+        "updatedAt"
+      ]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private customer profile, delivery preferences, and push notification settings.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "displayName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "email": {
+          "type": "string",
+          "minLength": 3,
+          "maxLength": 120
+        },
+        "phone": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 24
+        },
+        "deliveryAddress": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 240
+        },
+        "pushOptIn": {
+          "type": "boolean"
+        },
+        "defaultMilk": {
+          "type": "string",
+          "enum": ["Whole Dairy", "Oat Milk", "Almond Milk", "Soy Milk"]
+        },
+        "defaultSweetness": {
+          "type": "string",
+          "enum": ["Regular", "Less Sugar", "Sugar Free"]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "uid",
+        "displayName",
+        "email",
+        "phone",
+        "deliveryAddress",
+        "pushOptIn",
+        "defaultMilk",
+        "defaultSweetness",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer order with line items, gateway payment verification reference, and live tracking status.",
+      "type": "object",
+      "properties": {
+        "orderNumber": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 24
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "customerName": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80
+        },
+        "customerPhone": {
+          "type": "string",
+          "minLength": 5,
+          "maxLength": 24
+        },
+        "deliveryType": {
+          "type": "string",
+          "enum": ["Delivery", "Depot Pickup"]
+        },
+        "deliveryAddress": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 240
+        },
+        "items": {
+          "type": "array"
+        },
+        "subtotal": {
+          "type": "number"
+        },
+        "tax": {
+          "type": "number"
+        },
+        "deliveryFee": {
+          "type": "number"
+        },
+        "totalAmount": {
+          "type": "number"
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["Razorpay", "Stripe", "UPI", "Card", "Wallet", "Cash on Delivery"]
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["Paid", "Pending COD"]
+        },
+        "paymentReference": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 96
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Placed", "Brewing", "Quality Check", "Out for Delivery", "Delivered", "Cancelled"]
+        },
+        "estimatedMinutes": {
+          "type": "number"
+        },
+        "notes": {
+          "type": "string",
+          "minLength": 0,
+          "maxLength": 200
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "orderNumber",
+        "userId",
+        "customerName",
+        "customerPhone",
+        "deliveryType",
+        "deliveryAddress",
+        "items",
+        "subtotal",
+        "tax",
+        "deliveryFee",
+        "totalAmount",
+        "paymentMethod",
+        "paymentStatus",
+        "paymentReference",
+        "status",
+        "estimatedMinutes",
+        "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "UserNotification": {
+      "title": "UserNotification",
+      "description": "Real-time order status and depot notification stored under a user profile.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "orderId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "type": {
+          "type": "string",
+          "enum": ["order_placed", "status_update", "promo"]
+        },
+        "read": {
+          "type": "boolean"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "orderId",
+        "title",
+        "message",
+        "type",
+        "read",
+        "createdAt"
+      ]
+    },
+    "AdminMarker": {
+      "title": "AdminMarker",
+      "description": "Admin role assignment document keyed by user UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "role": {
+          "type": "string",
+          "enum": ["admin"]
+        }
+      },
+      "required": ["uid", "role"]
+    }
+  },
+  "firestore": {
+    "/menuItems/{itemId}": {
+      "schema": { "$ref": "#/entities/MenuItem" },
+      "description": "Public storefront catalog for Suman Cold Coffee Depot; admin-writable."
+    },
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Owner-only PII profile and ordering preferences."
+    },
+    "/users/{userId}/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/UserNotification" },
+      "description": "Owner-scoped real-time order update and push notification inbox."
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Customer orders synced in real time for live tracking and order history."
+    },
+    "/admins/{adminId}": {
+      "schema": { "$ref": "#/entities/AdminMarker" },
+      "description": "Authoritative admin UID registry."
+    }
+  }
+}

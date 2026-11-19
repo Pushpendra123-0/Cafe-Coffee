@@ -1,0 +1,8 @@
+{
+  "name": "Suman Cold Coffee Depot",
+  "description": "Artisanal cold coffee ordering with dynamic cloud menu, real-time order tracking, secure checkout, customer profiles, and push notifications.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
