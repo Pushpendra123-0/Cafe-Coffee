@@ -3,7 +3,7 @@ import QRCode from 'qrcode';
 import { Check, Copy, Download, ExternalLink, QrCode, X } from 'lucide-react';
 
 export const SHARED_PUBLIC_APP_URL =
-  'https://ais-pre-vmdxcpg64uptxpzqyxsi6w-500434753167.asia-northeast1.run.app';
+  'https://suman-cold-coffee-depot.onrender.com';
 
 export const DEV_PREVIEW_APP_URL =
   'https://ais-dev-vmdxcpg64uptxpzqyxsi6w-500434753167.asia-northeast1.run.app';
@@ -14,28 +14,28 @@ export function getPublicOrderBaseUrl(): string {
   if (typeof window === 'undefined') return SHARED_PUBLIC_APP_URL;
   const origin = window.location.origin;
   const isLocal = origin.includes('localhost') || origin.includes('127.0.0.1');
-  const isDevPreview = origin.startsWith('https://ais-dev-');
+  const isAiStudioPreview =
+    origin.startsWith('https://ais-dev-') || origin.startsWith('https://ais-pre-');
 
-  if (!isLocal && !isDevPreview && !origin.startsWith('https://ais-pre-')) {
+  if (!isLocal && !isAiStudioPreview) {
     return origin;
   }
 
   try {
     const saved = window.localStorage.getItem(SAVED_PUBLIC_URL_KEY);
-    if (saved && saved.trim().startsWith('http')) {
+    if (
+      saved &&
+      saved.trim().startsWith('http') &&
+      !saved.includes('ais-pre-') &&
+      !saved.includes('ais-dev-')
+    ) {
       return saved.trim().replace(/\/+$/, '');
     }
   } catch {
     // Ignore storage errors
   }
 
-  if (isLocal) {
-    return SHARED_PUBLIC_APP_URL;
-  }
-  if (isDevPreview) {
-    return origin.replace('https://ais-dev-', 'https://ais-pre-');
-  }
-  return origin;
+  return SHARED_PUBLIC_APP_URL;
 }
 
 export function getDevPreviewBaseUrl(): string {
@@ -316,7 +316,7 @@ export function OrderQrCard({ compact = false }: { compact?: boolean }) {
                   : 'text-zinc-600 hover:text-zinc-950'
               }`}
             >
-              Public Shared Link
+              Public Website Link
             </button>
             <button
               type="button"
@@ -332,8 +332,8 @@ export function OrderQrCard({ compact = false }: { compact?: boolean }) {
           </div>
           <p className="text-xs text-zinc-500 mt-1.5 leading-relaxed">
             {linkTarget === 'shared'
-              ? 'If you deployed to Cloud Run, paste your published .run.app link below (or open your published website and tap QR Code there). The ais-pre link only works when AI Studio Share App is enabled.'
-              : 'Works on a phone signed into your Google account while testing. Paste your live Cloud Run or Shared App link before printing for customers.'}
+              ? 'Uses your live public website URL (https://suman-cold-coffee-depot.onrender.com). You can also enter a custom .com/.in domain below anytime.'
+              : 'Works on a phone signed into your Google account while previewing inside AI Studio.'}
           </p>
         </div>
 
