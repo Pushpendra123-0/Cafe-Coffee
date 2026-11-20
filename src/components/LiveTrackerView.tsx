@@ -358,9 +358,16 @@ export function LiveTrackerView({
                   Need to change or cancel your order? Call Suman Cold Coffee Depot directly at{' '}
                   <a
                     href="tel:+918505939149"
-                    className="font-mono font-medium text-amber-800 hover:underline"
+                    className="font-mono font-medium text-amber-800 hover:underline tabular-nums"
                   >
                     8505939149
+                  </a>{' '}
+                  or{' '}
+                  <a
+                    href="tel:+919310923641"
+                    className="font-mono font-medium text-amber-800 hover:underline tabular-nums"
+                  >
+                    9310923641
                   </a>
                   .
                 </p>

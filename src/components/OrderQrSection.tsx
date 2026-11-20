@@ -200,7 +200,15 @@ export function OrderQrCard({ compact = false }: { compact?: boolean }) {
       ctx.fillText(
         'Pay with Cash / Shop QR (COD), UPI, Card, or Razorpay',
         450,
-        998
+        992
+      );
+
+      ctx.fillStyle = '#92400e';
+      ctx.font = '600 22px system-ui, -apple-system, sans-serif';
+      ctx.fillText(
+        'Call: 8505939149 / 9310923641',
+        450,
+        1038
       );
 
       ctx.fillStyle = '#f4f4f5';
@@ -259,6 +267,9 @@ export function OrderQrCard({ compact = false }: { compact?: boolean }) {
         </p>
         <p className="text-xs text-zinc-500 mt-0.5">
           Amity University Gate No. 4, Noida
+        </p>
+        <p className="text-xs font-mono text-amber-800 mt-1 tabular-nums">
+          8505939149 / 9310923641
         </p>
       </div>
 

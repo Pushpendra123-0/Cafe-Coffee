@@ -750,13 +750,71 @@ async function startServer() {
     });
   });
 
-  app.get('/api/orders/manager-alert-config', (_req, res) => {
+  app.get('/api/orders/manager-alert-config', async (req, res) => {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) {
+      res.status(401).json({ error: 'Authentication required.' });
+      return;
+    }
+    const verifiedUser = await verifyFirebaseUserToken(token);
+    if (!verifiedUser || verifiedUser.email.toLowerCase() !== DEPOT_MANAGER_EMAIL.toLowerCase()) {
+      res.status(403).json({ error: 'Forbidden.' });
+      return;
+    }
     const provider = getMailProvider();
     res.json({
-      managerEmail: DEPOT_MANAGER_EMAIL,
+      managerDisplayName: 'Suman Cold Coffee Depot',
       emailConfigured: provider !== 'none',
       provider,
     });
+  });
+
+  app.get('/api/manager/promo-short.mp4', async (req, res) => {
+    const authHeader = req.headers.authorization || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) {
+      res.status(401).json({ error: 'Sign in as Suman Cold Coffee Depot owner to access this video.' });
+      return;
+    }
+    const verifiedUser = await verifyFirebaseUserToken(token);
+    if (!verifiedUser || verifiedUser.email.toLowerCase() !== DEPOT_MANAGER_EMAIL.toLowerCase()) {
+      res.status(403).json({ error: 'This YouTube Short video is private to Suman Cold Coffee Depot.' });
+      return;
+    }
+
+    const videoPath = path.resolve(__dirname, 'private_media', 'suman-cold-coffee-short.mp4');
+    if (!fs.existsSync(videoPath)) {
+      res.status(404).json({ error: 'Promo video file not found.' });
+      return;
+    }
+
+    const stat = fs.statSync(videoPath);
+    const total = stat.size;
+    const range = req.headers.range;
+    res.setHeader('Content-Type', 'video/mp4');
+    res.setHeader('Accept-Ranges', 'bytes');
+    res.setHeader('Cache-Control', 'private, no-store');
+
+    if (range) {
+      const match = /^bytes=(\d+)-(\d*)$/.exec(range);
+      if (match) {
+        const start = Number(match[1]);
+        const end = match[2] ? Math.min(Number(match[2]), total - 1) : total - 1;
+        if (start >= total || start > end) {
+          res.status(416).setHeader('Content-Range', `bytes */${total}`).end();
+          return;
+        }
+        res.status(206);
+        res.setHeader('Content-Range', `bytes ${start}-${end}/${total}`);
+        res.setHeader('Content-Length', end - start + 1);
+        fs.createReadStream(videoPath, { start, end }).pipe(res);
+        return;
+      }
+    }
+
+    res.setHeader('Content-Length', total);
+    fs.createReadStream(videoPath).pipe(res);
   });
 
   app.post('/api/orders/notify-manager', async (req, res) => {
@@ -934,6 +992,11 @@ async function startServer() {
       managerEmail: DEPOT_MANAGER_EMAIL,
     });
   });
+
+  const publicDir = path.resolve(__dirname, 'public');
+  if (fs.existsSync(publicDir)) {
+    app.use(express.static(publicDir));
+  }
 
   const distPath = path.resolve(__dirname, 'dist');
   const isProd = process.env.NODE_ENV === 'production' && fs.existsSync(distPath);

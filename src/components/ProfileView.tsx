@@ -9,7 +9,7 @@ import type {
   UserNotification,
   UserProfile,
 } from '../types';
-import { BLUEPRINT_LIMITS } from '../firebase';
+import { BLUEPRINT_LIMITS, BOOTSTRAPPED_ADMIN_EMAIL } from '../firebase';
 import type { BrowserPushStatus } from '../utils/notifications';
 
 interface ProfileViewProps {
@@ -76,7 +76,11 @@ export function ProfileView({
       setDefaultSweetness(profile.defaultSweetness);
       setPushOptIn(profile.pushOptIn);
     } else if (user) {
-      setDisplayName(user.displayName || 'Depot Manager');
+      setDisplayName(
+        user.email === BOOTSTRAPPED_ADMIN_EMAIL
+          ? 'Suman Cold Coffee Depot'
+          : user.displayName || 'Suman Cold Coffee Depot'
+      );
     } else {
       setDisplayName(guestDetails.displayName);
       setPhone(guestDetails.phone);
@@ -282,10 +286,15 @@ export function ProfileView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-zinc-200">
         <div>
           <p className="text-xs text-zinc-500 mb-1">
-            {user.email} · {orders.length} orders · {completedCount} delivered · ₹{totalSpent} lifetime
+            {user.email === BOOTSTRAPPED_ADMIN_EMAIL ? 'Suman Cold Coffee Depot' : user.email} ·{' '}
+            {orders.length} orders · {completedCount} delivered · ₹{totalSpent} lifetime
           </p>
           <h1 className="font-display text-3xl font-semibold text-zinc-950">
-            {profile?.displayName || user.displayName || 'Your Depot Profile'}
+            {user.email === BOOTSTRAPPED_ADMIN_EMAIL
+              ? profile?.displayName && !profile.displayName.includes('@')
+                ? profile.displayName
+                : 'Suman Cold Coffee Depot'
+              : profile?.displayName || user.displayName || 'Your Depot Profile'}
           </h1>
         </div>
         <button

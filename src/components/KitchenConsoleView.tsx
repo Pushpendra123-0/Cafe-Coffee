@@ -7,6 +7,7 @@ import {
   Database,
   ExternalLink,
   Mail,
+  PlayCircle,
   Plus,
   Search,
   ShieldAlert,
@@ -26,9 +27,10 @@ import {
   playNewOrderChime,
   type BrowserPushStatus,
 } from '../utils/notifications';
-import { BLUEPRINT_LIMITS, BOOTSTRAPPED_ADMIN_EMAIL } from '../firebase';
+import { BLUEPRINT_LIMITS } from '../firebase';
 import { DEFAULT_MENU_ITEMS } from '../data/defaultMenu';
 import { OrderQrCard } from './OrderQrSection';
+import { PromoShortModal } from './PromoShortModal';
 
 interface KitchenConsoleViewProps {
   user: User | null;
@@ -319,11 +321,11 @@ export function KitchenConsoleView({
   const [savingItem, setSavingItem] = useState(false);
   const [feedback, setFeedback] = useState('');
   const [alertConfig, setAlertConfig] = useState<{
-    managerEmail: string;
+    managerDisplayName: string;
     emailConfigured: boolean;
     provider: string;
   }>({
-    managerEmail: BOOTSTRAPPED_ADMIN_EMAIL,
+    managerDisplayName: 'Suman Cold Coffee Depot',
     emailConfigured: false,
     provider: 'none',
   });
@@ -332,18 +334,25 @@ export function KitchenConsoleView({
     ok: boolean;
     message: string;
   } | null>(null);
+  const [privateShortOpen, setPrivateShortOpen] = useState(false);
 
   useEffect(() => {
-    if (!isAdmin) return;
-    fetch('/api/orders/manager-alert-config')
+    if (!isAdmin || !user) return;
+    user
+      .getIdToken()
+      .then((idToken) =>
+        fetch('/api/orders/manager-alert-config', {
+          headers: { Authorization: `Bearer ${idToken}` },
+        })
+      )
       .then((r) => (r.ok ? r.json() : null))
       .then((cfg) => {
-        if (cfg && typeof cfg.managerEmail === 'string') {
+        if (cfg && typeof cfg.emailConfigured === 'boolean') {
           setAlertConfig(cfg);
         }
       })
       .catch(() => {});
-  }, [isAdmin]);
+  }, [isAdmin, user]);
 
   async function handleSendTestEmail() {
     if (!user || sendingTestEmail) return;
@@ -367,7 +376,7 @@ export function KitchenConsoleView({
       if (resp.ok && data.sent) {
         setEmailFeedback({
           ok: true,
-          message: `Test order email sent to ${data.managerEmail || alertConfig.managerEmail}.`,
+          message: `Test order email sent to Suman Cold Coffee Depot's registered manager inbox.`,
         });
       } else {
         setEmailFeedback({
@@ -433,10 +442,10 @@ export function KitchenConsoleView({
       <section className="max-w-4xl mx-auto px-4 sm:px-6 py-16">
         <div className="bg-white border border-zinc-200 rounded-xl p-10 text-center">
           <h1 className="font-display text-3xl font-semibold text-zinc-950 mb-3">
-            Depot Manager Sign-In Only
+            Suman Cold Coffee Depot · Manager Sign-In
           </h1>
           <p className="text-sm text-zinc-600 max-w-md mx-auto mb-6 leading-relaxed">
-            Customers do not need to sign in to order. Sign in here with the Depot Manager account ({BOOTSTRAPPED_ADMIN_EMAIL}) to manage live orders, payments, and the cafe menu.
+            Customers do not need to sign in to order. Sign in here with the authorized Suman Cold Coffee Depot owner account to manage live orders, payments, and the cafe menu.
           </p>
           <button
             type="button"
@@ -462,7 +471,7 @@ export function KitchenConsoleView({
             Depot Manager Authorization Required
           </h1>
           <p className="text-sm text-zinc-600 leading-relaxed">
-            Signed in as <span className="font-mono">{user.email}</span>. Customer order fulfillment, payment ledgers, and cloud menu management are restricted exclusively to the Depot Manager ({BOOTSTRAPPED_ADMIN_EMAIL}).
+            Signed in as <span className="font-mono">{user.email}</span>. Customer order fulfillment, payment ledgers, and cloud menu management are restricted exclusively to Suman Cold Coffee Depot.
           </p>
           <button
             type="button"
@@ -527,7 +536,7 @@ export function KitchenConsoleView({
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-zinc-200">
         <div>
           <p className="text-xs font-medium text-amber-800 mb-1">
-            Depot Manager · {user.email}
+            Suman Cold Coffee Depot · Manager Console
           </p>
           <h1 className="font-display text-3xl font-semibold text-zinc-950">
             Customer Orders, Payments & Live Menu
@@ -583,11 +592,11 @@ export function KitchenConsoleView({
               <span>Depot Manager Order Notifications</span>
             </h2>
             <p className="text-xs text-zinc-600 leading-relaxed">
-              New order alerts route to{' '}
-              <span className="font-mono font-medium text-zinc-950">
-                {alertConfig.managerEmail}
-              </span>{' '}
-              along with desktop popups and sound chimes while you work in other apps or tabs.
+              New order alerts route internally to{' '}
+              <span className="font-medium text-zinc-950">
+                {alertConfig.managerDisplayName}
+              </span>
+              &apos;s configured manager email along with desktop popups and sound chimes while you work in other apps or tabs.
             </p>
           </div>
 
@@ -667,8 +676,7 @@ export function KitchenConsoleView({
             Email alerts are waiting for credentials: add{' '}
             <span className="font-mono font-medium">GMAIL_USER</span> and{' '}
             <span className="font-mono font-medium">GMAIL_APP_PASSWORD</span> (a 16-character Google App Password) — or{' '}
-            <span className="font-mono font-medium">RESEND_API_KEY</span> — in AI Studio Secrets so every new order emails{' '}
-            <span className="font-mono">{alertConfig.managerEmail}</span>.
+            <span className="font-mono font-medium">RESEND_API_KEY</span> — in Secrets so every new order emails Suman Cold Coffee Depot&apos;s manager inbox.
           </p>
         )}
 
@@ -1026,6 +1034,31 @@ export function KitchenConsoleView({
       </div>
 
       <OrderQrCard />
+
+      <div className="bg-white border border-zinc-200 rounded-xl p-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="space-y-1">
+          <h2 className="font-display text-lg font-semibold text-zinc-950">
+            Your Private YouTube Short (Owner Only)
+          </h2>
+          <p className="text-xs text-zinc-600 leading-relaxed">
+            Removed from the public website so only you can download the 9:16 MP4 and copy the title &amp; tags for your YouTube channel.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setPrivateShortOpen(true)}
+          className="inline-flex items-center gap-2 px-4 py-2.5 min-h-[40px] text-xs font-medium bg-zinc-950 text-white rounded-lg hover:bg-zinc-800 whitespace-nowrap shrink-0 cursor-pointer"
+        >
+          <PlayCircle className="w-4 h-4" />
+          <span>Download / Preview YouTube Short</span>
+        </button>
+      </div>
+
+      <PromoShortModal
+        open={privateShortOpen}
+        user={user}
+        onClose={() => setPrivateShortOpen(false)}
+      />
     </section>
   );
 }

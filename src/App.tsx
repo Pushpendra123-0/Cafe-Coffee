@@ -289,7 +289,7 @@ function DepotApp() {
           if (!snap.exists()) {
             await setDoc(userRef, {
               uid: nextUser.uid,
-              displayName: (nextUser.displayName || 'Depot Manager').slice(0, 80),
+              displayName: 'Suman Cold Coffee Depot',
               email: (nextUser.email || BOOTSTRAPPED_ADMIN_EMAIL).slice(0, 120),
               phone: '',
               deliveryAddress: '',
@@ -1191,6 +1191,13 @@ function DepotApp() {
                       >
                         8505939149
                       </a>
+                      {' / '}
+                      <a
+                        href="tel:+919310923641"
+                        className="hover:underline underline-offset-2 tabular-nums"
+                      >
+                        9310923641
+                      </a>
                     </p>
                     <h1 className="font-display text-4xl sm:text-5xl font-semibold text-zinc-950 tracking-tight leading-[1.08]">
                       Shakes, Mojitos, Maggi &amp; Hot Cafe Eats.
@@ -1217,7 +1224,7 @@ function DepotApp() {
                     <button
                       type="button"
                       onClick={() => setQrModalOpen(true)}
-                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-zinc-700 hover:text-zinc-950 underline underline-offset-4 cursor-pointer"
+                      className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-zinc-700 hover:text-zinc-950 underline underline-offset-4 cursor-pointer whitespace-nowrap shrink-0"
                     >
                       <QrCode className="w-4 h-4" />
                       <span>Scan / Print Order QR</span>
@@ -1383,7 +1390,14 @@ function DepotApp() {
       <footer className="border-t border-zinc-200 bg-white">
         <div className="max-w-6xl mx-auto px-4 sm:px-6 py-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs text-zinc-500">
           <p>
-            © {new Date().getFullYear()} Suman Cold Coffee Depot · In front of Amity University Gate No. 4, Noida, Uttar Pradesh
+            © {new Date().getFullYear()} Suman Cold Coffee Depot · In front of Amity University Gate No. 4, Noida, Uttar Pradesh ·{' '}
+            <a href="tel:+918505939149" className="hover:text-zinc-950 tabular-nums">
+              8505939149
+            </a>
+            {' / '}
+            <a href="tel:+919310923641" className="hover:text-zinc-950 tabular-nums">
+              9310923641
+            </a>
           </p>
           <div className="flex items-center gap-5">
             <button
