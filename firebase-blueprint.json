@@ -159,7 +159,8 @@
           "type": "string",
           "minLength": 1,
           "maxLength": 128,
-          "pattern": "^[a-zA-Z0-9_\\-]+$"
+          "pattern": "^[a-zA-Z0-9_\\-]+$",
+          "description": "Verified Firebase Auth UID or guest device ID (guest_<id>)."
         },
         "customerName": {
           "type": "string",
@@ -247,6 +248,72 @@
         "status",
         "estimatedMinutes",
         "notes",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "OrderStatusMirror": {
+      "title": "OrderStatusMirror",
+      "description": "Zero-PII live order tracking mirror keyed by high-entropy orderId so guest customers can track status without signing in or reading PII.",
+      "type": "object",
+      "properties": {
+        "orderId": {
+          "type": "string",
+          "minLength": 18,
+          "maxLength": 128,
+          "pattern": "^[a-zA-Z0-9_\\-]+$"
+        },
+        "orderNumber": {
+          "type": "string",
+          "minLength": 4,
+          "maxLength": 24
+        },
+        "status": {
+          "type": "string",
+          "enum": ["Placed", "Brewing", "Quality Check", "Out for Delivery", "Delivered", "Cancelled"]
+        },
+        "estimatedMinutes": {
+          "type": "number"
+        },
+        "deliveryType": {
+          "type": "string",
+          "enum": ["Delivery", "Depot Pickup"]
+        },
+        "paymentMethod": {
+          "type": "string",
+          "enum": ["Razorpay", "Stripe", "UPI", "Card", "Wallet", "Cash on Delivery"]
+        },
+        "paymentStatus": {
+          "type": "string",
+          "enum": ["Paid", "Pending COD"]
+        },
+        "totalAmount": {
+          "type": "number"
+        },
+        "itemsSummary": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 240
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "orderId",
+        "orderNumber",
+        "status",
+        "estimatedMinutes",
+        "deliveryType",
+        "paymentMethod",
+        "paymentStatus",
+        "totalAmount",
+        "itemsSummary",
         "createdAt",
         "updatedAt"
       ]
@@ -340,7 +407,11 @@
     },
     "/orders/{orderId}": {
       "schema": { "$ref": "#/entities/Order" },
-      "description": "Customer orders synced in real time for live tracking and order history."
+      "description": "Customer orders containing PII; guest-creatable with high-entropy IDs and readable only by Depot Manager or signed-in owner."
+    },
+    "/orderStatus/{orderId}": {
+      "schema": { "$ref": "#/entities/OrderStatusMirror" },
+      "description": "Zero-PII live order tracking mirror keyed by high-entropy orderId for guest live tracking."
     },
     "/admins/{adminId}": {
       "schema": { "$ref": "#/entities/AdminMarker" },

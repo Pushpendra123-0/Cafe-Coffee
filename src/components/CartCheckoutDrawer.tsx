@@ -12,6 +12,7 @@ import {
 import type {
   CartItem,
   DeliveryType,
+  GuestCustomerDetails,
   OrderLineItem,
   PaymentMethod,
   UserProfile,
@@ -24,11 +25,11 @@ interface CartCheckoutDrawerProps {
   items: CartItem[];
   user: User | null;
   profile: UserProfile | null;
+  guestDetails: GuestCustomerDetails;
   defaultDeliveryType?: DeliveryType;
   onClose: () => void;
   onUpdateQty: (cartKey: string, delta: number) => void;
   onRemoveItem: (cartKey: string) => void;
-  onSignIn: () => Promise<void>;
   onPlaceOrder: (payload: {
     customerName: string;
     customerPhone: string;
@@ -90,11 +91,11 @@ export function CartCheckoutDrawer({
   items,
   user,
   profile,
+  guestDetails,
   defaultDeliveryType = 'Delivery',
   onClose,
   onUpdateQty,
   onRemoveItem,
-  onSignIn,
   onPlaceOrder,
 }: CartCheckoutDrawerProps) {
   const [deliveryType, setDeliveryType] = useState<DeliveryType>(defaultDeliveryType);
@@ -136,9 +137,13 @@ export function CartCheckoutDrawer({
 
   useEffect(() => {
     if (open) {
-      setCustomerName((prev) => prev || profile?.displayName || user?.displayName || '');
-      setCustomerPhone((prev) => prev || profile?.phone || '');
-      setDeliveryAddress((prev) => prev || profile?.deliveryAddress || '');
+      setCustomerName(
+        (prev) => prev || guestDetails.displayName || profile?.displayName || user?.displayName || ''
+      );
+      setCustomerPhone((prev) => prev || guestDetails.phone || profile?.phone || '');
+      setDeliveryAddress(
+        (prev) => prev || guestDetails.deliveryAddress || profile?.deliveryAddress || ''
+      );
       fetch('/api/payments/config')
         .then((r) => (r.ok ? r.json() : null))
         .then((cfg) => {
@@ -148,7 +153,7 @@ export function CartCheckoutDrawer({
     } else {
       setRazorpaySession(null);
     }
-  }, [open, profile, user]);
+  }, [open, guestDetails, profile, user]);
 
   if (!open) return null;
 
@@ -225,11 +230,6 @@ export function CartCheckoutDrawer({
   async function handleCheckout(e: React.FormEvent) {
     e.preventDefault();
     setErrorMsg('');
-
-    if (!user) {
-      setErrorMsg('Please sign in with Google to verify your identity and track your order.');
-      return;
-    }
 
     if (items.length === 0) return;
 
@@ -333,7 +333,7 @@ export function CartCheckoutDrawer({
               order_id: intentData.razorpayOrderId,
               prefill: {
                 name: cleanName,
-                email: user.email || '',
+                email: user?.email || '',
                 contact: cleanPhone,
               },
               handler: async (resp: {
@@ -566,25 +566,9 @@ export function CartCheckoutDrawer({
               </div>
 
               <form id="checkout-form" onSubmit={handleCheckout} className="space-y-5">
-                {!user && (
-                  <div className="border border-amber-200 bg-amber-50/70 rounded-xl p-4 flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-medium text-zinc-950">
-                        Sign in to place &amp; track your order
-                      </p>
-                      <p className="text-xs text-zinc-600 mt-0.5 leading-relaxed">
-                        Opens Google Sign-In for Suman Cold Coffee Depot (<span className="font-mono">steady-conquest-pf900.firebaseapp.com</span>).
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={onSignIn}
-                      className="px-3.5 py-2 text-xs font-medium bg-zinc-950 text-white rounded-lg hover:bg-zinc-800 whitespace-nowrap shrink-0 cursor-pointer"
-                    >
-                      Google Sign-In
-                    </button>
-                  </div>
-                )}
+                <p className="text-xs text-emerald-800 bg-emerald-50 border border-emerald-200 rounded-lg px-3.5 py-2.5">
+                  No sign-in needed — just enter your name, mobile number, and delivery/pickup details to place your order.
+                </p>
 
                 <div>
                   <label className="block text-xs font-medium text-zinc-700 mb-1.5">
@@ -836,32 +820,21 @@ export function CartCheckoutDrawer({
 
         {items.length > 0 && (
           <div className="px-6 py-4 border-t border-zinc-200 bg-white">
-            {!user ? (
-              <button
-                type="button"
-                onClick={onSignIn}
-                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[46px] text-sm font-semibold bg-zinc-950 text-white rounded-lg hover:bg-zinc-800 transition-colors cursor-pointer"
-              >
-                <Lock className="w-4 h-4" />
-                <span>Sign in with Google to Order · ₹{totalAmount}</span>
-              </button>
-            ) : (
-              <button
-                type="submit"
-                form="checkout-form"
-                disabled={submitting}
-                className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[46px] text-sm font-semibold bg-zinc-950 text-white rounded-lg hover:bg-zinc-800 disabled:bg-zinc-300 disabled:text-zinc-500 disabled:cursor-not-allowed transition-colors cursor-pointer"
-              >
-                <Lock className="w-4 h-4" />
-                <span>
-                  {submitting
-                    ? 'Verifying Prices & Placing Order...'
-                    : paymentMethod === 'Cash on Delivery'
-                    ? `Confirm COD Order · ₹${totalAmount}`
-                    : `Pay with ${paymentMethod} · ₹${totalAmount}`}
-                </span>
-              </button>
-            )}
+            <button
+              type="submit"
+              form="checkout-form"
+              disabled={submitting}
+              className="w-full inline-flex items-center justify-center gap-2 px-5 py-3 min-h-[46px] text-sm font-semibold bg-zinc-950 text-white rounded-lg hover:bg-zinc-800 disabled:bg-zinc-300 disabled:text-zinc-500 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <Lock className="w-4 h-4" />
+              <span>
+                {submitting
+                  ? 'Verifying Prices & Placing Order...'
+                  : paymentMethod === 'Cash on Delivery'
+                  ? `Confirm COD Order · ₹${totalAmount}`
+                  : `Pay with ${paymentMethod} · ₹${totalAmount}`}
+              </span>
+            </button>
           </div>
         )}
       </div>

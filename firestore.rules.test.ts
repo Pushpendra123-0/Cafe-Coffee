@@ -12,6 +12,7 @@ export interface DirtyDozenCheck {
 }
 
 const VALID_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
+const VALID_GUEST_ID_REGEX = /^guest_[a-zA-Z0-9]{12,64}$/;
 
 export function isValidIdClient(id: string): boolean {
   return typeof id === 'string' && id.length >= 1 && id.length <= 128 && VALID_ID_REGEX.test(id);
@@ -20,9 +21,9 @@ export function isValidIdClient(id: string): boolean {
 export const dirtyDozenSuite: DirtyDozenCheck[] = [
   {
     id: 1,
-    name: 'Unauthenticated Order Creation',
+    name: 'Unauthenticated Order PII Read',
     expectedOutcome: 'PERMISSION_DENIED',
-    violatedPillar: 'Pillar 4 / Auth Gate',
+    violatedPillar: 'Pillar 6 (PII Isolation on /orders)',
     verifyRejection: () => {
       const auth: { uid: string } | null = null;
       return auth === null;
@@ -43,26 +44,28 @@ export const dirtyDozenSuite: DirtyDozenCheck[] = [
   },
   {
     id: 3,
-    name: 'Identity Spoofing on Order',
+    name: 'Identity Spoofing on Signed-In or Guest Order',
     expectedOutcome: 'PERMISSION_DENIED',
     violatedPillar: 'Pillar 2 (Identity Integrity)',
     verifyRejection: () => {
       const authUid: string = 'user_A';
-      const payloadUserId: string = 'user_B';
-      return payloadUserId !== authUid;
+      const payloadUserId: string = 'guest_invalid';
+      return payloadUserId !== authUid && !VALID_GUEST_ID_REGEX.test(payloadUserId);
     },
   },
   {
     id: 4,
-    name: 'Shadow Field Injection on Profile',
+    name: 'Shadow Field Injection on Guest Order',
     expectedOutcome: 'PERMISSION_DENIED',
-    violatedPillar: 'Pillar 2 (Strict hasOnly)',
+    violatedPillar: 'Pillar 2 (Strict hasOnly & Initial Status)',
     verifyRejection: () => {
       const allowedKeys = new Set([
-        'uid', 'displayName', 'email', 'phone', 'deliveryAddress',
-        'pushOptIn', 'defaultMilk', 'defaultSweetness', 'createdAt', 'updatedAt',
+        'orderNumber', 'userId', 'customerName', 'customerPhone', 'deliveryType',
+        'deliveryAddress', 'items', 'subtotal', 'tax', 'deliveryFee', 'totalAmount',
+        'paymentMethod', 'paymentStatus', 'paymentReference', 'status',
+        'estimatedMinutes', 'notes', 'createdAt', 'updatedAt',
       ]);
-      const payloadKeys = ['uid', 'displayName', 'email', 'isAdmin'];
+      const payloadKeys = ['orderNumber', 'userId', 'isAdmin'];
       return payloadKeys.some((k) => !allowedKeys.has(k));
     },
   },
@@ -80,14 +83,14 @@ export const dirtyDozenSuite: DirtyDozenCheck[] = [
   },
   {
     id: 6,
-    name: 'Blanket User Collection List',
+    name: 'Blanket User or OrderStatus Collection List',
     expectedOutcome: 'PERMISSION_DENIED',
     violatedPillar: 'Pillar 6 & 8 (No Blanket List)',
     verifyRejection: () => true,
   },
   {
     id: 7,
-    name: 'Order Status Shortcutting by Customer',
+    name: 'Order Status Shortcutting by Non-Admin',
     expectedOutcome: 'PERMISSION_DENIED',
     violatedPillar: 'Pillar 4 (Tiered Update Actions)',
     verifyRejection: () => {
@@ -123,7 +126,8 @@ export const dirtyDozenSuite: DirtyDozenCheck[] = [
     expectedOutcome: 'PERMISSION_DENIED',
     violatedPillar: 'Pillar 3 (Path Hardening & Size Bounds)',
     verifyRejection: () => {
-      return !isValidIdClient('bad$id!!') && 'x'.repeat(5000).length > 200;
+      const shortOrderId = 'ord_short';
+      return shortOrderId.length < 18 && !isValidIdClient('bad$id!!') && 'x'.repeat(5000).length > 200;
     },
   },
   {

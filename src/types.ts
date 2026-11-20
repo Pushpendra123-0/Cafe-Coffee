@@ -127,4 +127,10 @@ export interface UserNotification {
   createdAt?: { seconds: number; nanoseconds: number } | null;
 }
 
+export interface GuestCustomerDetails {
+  displayName: string;
+  phone: string;
+  deliveryAddress: string;
+}
+
 export type ActiveView = 'menu' | 'tracker' | 'profile' | 'kitchen';

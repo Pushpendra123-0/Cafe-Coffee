@@ -35,6 +35,10 @@ service cloud.firestore {
       return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
 
+    function isValidGuestId(id) {
+      return id is string && id.size() >= 18 && id.size() <= 72 && id.matches('^guest_[a-zA-Z0-9]{12,64}$');
+    }
+
     function incoming() {
       return request.resource.data;
     }
@@ -147,6 +151,31 @@ service cloud.firestore {
         && data.updatedAt is timestamp;
     }
 
+    function isValidOrderStatus(data) {
+      return data.keys().hasAll([
+          'orderId', 'orderNumber', 'status', 'estimatedMinutes',
+          'deliveryType', 'paymentMethod', 'paymentStatus',
+          'totalAmount', 'itemsSummary', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'orderId', 'orderNumber', 'status', 'estimatedMinutes',
+          'deliveryType', 'paymentMethod', 'paymentStatus',
+          'totalAmount', 'itemsSummary', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.orderId)
+        && data.orderId.size() >= 18
+        && data.orderNumber is string && data.orderNumber.size() >= 4 && data.orderNumber.size() <= 24
+        && data.status in ['Placed', 'Brewing', 'Quality Check', 'Out for Delivery', 'Delivered', 'Cancelled']
+        && data.estimatedMinutes is number && data.estimatedMinutes >= 1 && data.estimatedMinutes <= 120
+        && data.deliveryType in ['Delivery', 'Depot Pickup']
+        && data.paymentMethod in ['Razorpay', 'Stripe', 'UPI', 'Card', 'Wallet', 'Cash on Delivery']
+        && data.paymentStatus in ['Paid', 'Pending COD']
+        && data.totalAmount is number && data.totalAmount >= 1 && data.totalAmount <= 60000
+        && data.itemsSummary is string && data.itemsSummary.size() >= 1 && data.itemsSummary.size() <= 240
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
     function isValidNotification(data) {
       return data.keys().hasAll([
           'id', 'userId', 'orderId', 'title', 'message', 'type', 'read', 'createdAt'
@@ -190,7 +219,7 @@ service cloud.firestore {
       allow delete: if isAdmin() && isValidId(itemId);
     }
 
-    // Private customer profiles (strict PII isolation)
+    // Private customer/manager profiles (strict PII isolation)
     match /users/{userId} {
       allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
       allow list: if false;
@@ -240,17 +269,20 @@ service cloud.firestore {
       }
     }
 
-    // Orders & Real-Time Tracking (O(1) list with no get()/exists())
+    // Orders containing PII: guest-creatable (no customer sign-in), read/list strictly Manager or signed-in owner
     match /orders/{orderId} {
       allow get: if isValidId(orderId) && isSignedIn() && (existing().userId == request.auth.uid || isAdmin());
       allow list: if isSignedIn() && (resource.data.userId == request.auth.uid || isBootstrappedAdminEmail());
-      allow create: if isVerifiedUser()
-        && isValidId(orderId)
+      allow create: if isValidId(orderId)
+        && orderId.size() >= 18
         && isValidOrder(incoming())
-        && incoming().userId == request.auth.uid
         && incoming().status == 'Placed'
         && incoming().createdAt == request.time
-        && incoming().updatedAt == request.time;
+        && incoming().updatedAt == request.time
+        && (
+          (isVerifiedUser() && incoming().userId == request.auth.uid)
+          || (!isSignedIn() && isValidGuestId(incoming().userId))
+        );
       allow update: if isVerifiedUser()
         && isValidId(orderId)
         && isValidOrder(incoming())
@@ -267,7 +299,7 @@ service cloud.firestore {
             ])
           )
           ||
-          // Action 2: Customer cancels only while status is still 'Placed' (non-terminal)
+          // Action 2: Authenticated owner cancels only while status is still 'Placed'
           (
             existing().userId == request.auth.uid
             && existing().status == 'Placed'
@@ -275,6 +307,30 @@ service cloud.firestore {
             && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
           )
         );
+      allow delete: if false;
+    }
+
+    // Zero-PII live order tracking mirror for guests (no name, phone, or address)
+    match /orderStatus/{orderId} {
+      allow get: if isValidId(orderId) && orderId.size() >= 18;
+      allow list: if isBootstrappedAdminEmail();
+      allow create: if isValidId(orderId)
+        && orderId.size() >= 18
+        && isValidOrderStatus(incoming())
+        && incoming().orderId == orderId
+        && incoming().status == 'Placed'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(orderId)
+        && isValidOrderStatus(incoming())
+        && incoming().orderId == existing().orderId
+        && incoming().orderNumber == existing().orderNumber
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'status', 'estimatedMinutes', 'paymentStatus', 'updatedAt'
+        ]);
       allow delete: if false;
     }
 

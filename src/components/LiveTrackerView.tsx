@@ -10,7 +10,6 @@ interface LiveTrackerViewProps {
   selectedOrderId: string | null;
   onSelectOrder: (orderId: string) => void;
   onCancelOrder: (order: Order) => Promise<void>;
-  onSignIn: () => Promise<void>;
   onBrowseMenu: () => void;
   pushOptIn: boolean;
   browserPushStatus: BrowserPushStatus;
@@ -63,7 +62,6 @@ export function LiveTrackerView({
   selectedOrderId,
   onSelectOrder,
   onCancelOrder,
-  onSignIn,
   onBrowseMenu,
   pushOptIn,
   browserPushStatus,
@@ -94,28 +92,6 @@ export function LiveTrackerView({
     }, 1000);
     return () => window.clearInterval(timer);
   }, [activeOrderId, activeOrderStatus]);
-
-  if (!user) {
-    return (
-      <section className="max-w-4xl mx-auto px-4 sm:px-6 py-16">
-        <div className="bg-white border border-zinc-200 rounded-xl p-10 text-center">
-          <h1 className="font-display text-3xl font-semibold text-zinc-950 mb-3">
-            Real-Time Order Tracking
-          </h1>
-          <p className="text-sm text-zinc-600 max-w-md mx-auto mb-6 leading-relaxed">
-            Sign in with Google to monitor live barista progress, courier ETAs, and push updates synced directly from our cloud kitchen.
-          </p>
-          <button
-            type="button"
-            onClick={onSignIn}
-            className="px-5 py-2.5 min-h-[44px] text-sm font-medium bg-zinc-950 text-white rounded-lg hover:bg-zinc-800 cursor-pointer"
-          >
-            Sign in with Google
-          </button>
-        </div>
-      </section>
-    );
-  }
 
   if (orders.length === 0 || !activeOrder) {
     return (
@@ -364,16 +340,31 @@ export function LiveTrackerView({
 
           {activeOrder.status === 'Placed' && (
             <div className="pt-6 border-t border-zinc-100 flex items-center justify-between gap-4">
-              <p className="text-xs text-zinc-500">
-                Changed your mind? You can cancel before the barista starts brewing.
-              </p>
-              <button
-                type="button"
-                onClick={() => onCancelOrder(activeOrder)}
-                className="px-3.5 py-2 text-xs font-medium text-red-700 border border-red-200 rounded-lg hover:bg-red-50 whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                Cancel Order
-              </button>
+              {user && activeOrder.userId === user.uid ? (
+                <>
+                  <p className="text-xs text-zinc-500">
+                    Changed your mind? You can cancel before the barista starts brewing.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => onCancelOrder(activeOrder)}
+                    className="px-3.5 py-2 text-xs font-medium text-red-700 border border-red-200 rounded-lg hover:bg-red-50 whitespace-nowrap shrink-0 cursor-pointer"
+                  >
+                    Cancel Order
+                  </button>
+                </>
+              ) : (
+                <p className="text-xs text-zinc-600">
+                  Need to change or cancel your order? Call Suman Cold Coffee Depot directly at{' '}
+                  <a
+                    href="tel:+918505939149"
+                    className="font-mono font-medium text-amber-800 hover:underline"
+                  >
+                    8505939149
+                  </a>
+                  .
+                </p>
+              )}
             </div>
           )}
         </div>

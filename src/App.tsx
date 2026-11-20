@@ -33,6 +33,7 @@ import type {
   ActiveView,
   CartItem,
   DeliveryType,
+  GuestCustomerDetails,
   MenuCategory,
   MenuItem,
   MilkOption,
@@ -40,6 +41,7 @@ import type {
   OrderLineItem,
   OrderStatus,
   PaymentMethod,
+  PaymentStatus,
   SizeOption,
   SizePrices,
   SweetnessOption,
@@ -91,6 +93,77 @@ const SECTION_IMAGE_BY_CATEGORY: Record<MenuCategory, string> = {
   'Kurkuria Sandwich': '/src/assets/images/cafe_grilled_sandwich_1794935517232.jpg',
 };
 
+const GUEST_ID_STORAGE_KEY = 'suman_depot_guest_id';
+const GUEST_DETAILS_STORAGE_KEY = 'suman_depot_guest_details';
+const GUEST_ORDERS_STORAGE_KEY = 'suman_depot_guest_orders';
+
+function randomAlnum(length: number): string {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let out = '';
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    const buf = new Uint8Array(length);
+    crypto.getRandomValues(buf);
+    for (let i = 0; i < length; i++) {
+      out += chars[buf[i] % chars.length];
+    }
+    return out;
+  }
+  for (let i = 0; i < length; i++) {
+    out += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return out;
+}
+
+function getOrCreateGuestId(): string {
+  if (typeof window === 'undefined') return 'guest_default00000001';
+  try {
+    const existing = window.localStorage.getItem(GUEST_ID_STORAGE_KEY);
+    if (existing && /^guest_[a-zA-Z0-9]{12,64}$/.test(existing)) {
+      return existing;
+    }
+    const created = `guest_${randomAlnum(16)}`;
+    window.localStorage.setItem(GUEST_ID_STORAGE_KEY, created);
+    return created;
+  } catch {
+    return `guest_${randomAlnum(16)}`;
+  }
+}
+
+function loadGuestDetails(): GuestCustomerDetails {
+  if (typeof window === 'undefined') {
+    return { displayName: '', phone: '', deliveryAddress: '' };
+  }
+  try {
+    const raw = window.localStorage.getItem(GUEST_DETAILS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Partial<GuestCustomerDetails>;
+      return {
+        displayName: typeof parsed.displayName === 'string' ? parsed.displayName : '',
+        phone: typeof parsed.phone === 'string' ? parsed.phone : '',
+        deliveryAddress:
+          typeof parsed.deliveryAddress === 'string' ? parsed.deliveryAddress : '',
+      };
+    }
+  } catch {
+    // Ignore storage error
+  }
+  return { displayName: '', phone: '', deliveryAddress: '' };
+}
+
+function loadGuestOrders(): Order[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(GUEST_ORDERS_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw) as Order[];
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // Ignore storage error
+  }
+  return [];
+}
+
 function serializeMenuItemForFirestore(item: Omit<MenuItem, 'updatedAt'>) {
   const payload: Record<string, unknown> = {
     id: item.id,
@@ -127,6 +200,11 @@ function DepotApp() {
 
   const [cloudMenuItems, setCloudMenuItems] = useState<MenuItem[]>([]);
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [guestId] = useState<string>(() => getOrCreateGuestId());
+  const [guestDetails, setGuestDetails] = useState<GuestCustomerDetails>(() =>
+    loadGuestDetails()
+  );
+  const [guestOrders, setGuestOrders] = useState<Order[]>(() => loadGuestOrders());
   const [orders, setOrders] = useState<Order[]>([]);
   const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -188,19 +266,31 @@ function DepotApp() {
   }, [cart]);
 
   useEffect(() => {
+    try {
+      localStorage.setItem(GUEST_ORDERS_STORAGE_KEY, JSON.stringify(guestOrders.slice(0, 25)));
+    } catch {
+      // Ignore storage quota issues
+    }
+  }, [guestOrders]);
+
+  useEffect(() => {
     const unsub = onAuthStateChanged(auth, async (nextUser) => {
       setUser(nextUser);
       setAuthReady(true);
 
-      if (nextUser) {
+      const isVerifiedAdmin =
+        Boolean(nextUser?.emailVerified) &&
+        nextUser?.email === BOOTSTRAPPED_ADMIN_EMAIL;
+
+      if (nextUser && isVerifiedAdmin) {
         const userRef = doc(db, 'users', nextUser.uid);
         try {
           const snap = await getDoc(userRef);
           if (!snap.exists()) {
             await setDoc(userRef, {
               uid: nextUser.uid,
-              displayName: (nextUser.displayName || 'Coffee Guest').slice(0, 80),
-              email: (nextUser.email || 'guest@sumandepot.local').slice(0, 120),
+              displayName: (nextUser.displayName || 'Depot Manager').slice(0, 80),
+              email: (nextUser.email || BOOTSTRAPPED_ADMIN_EMAIL).slice(0, 120),
               phone: '',
               deliveryAddress: '',
               pushOptIn: true,
@@ -213,7 +303,7 @@ function DepotApp() {
         } catch (err) {
           handleFirestoreError(err, OperationType.WRITE, `users/${nextUser.uid}`);
         }
-      } else {
+      } else if (!nextUser) {
         setProfile(null);
         setOrders([]);
         setNotifications([]);
@@ -223,6 +313,64 @@ function DepotApp() {
     });
     return () => unsub();
   }, []);
+
+  const guestTrackIdsKey = useMemo(
+    () =>
+      guestOrders
+        .slice(0, 10)
+        .map((o) => o.id)
+        .join(','),
+    [guestOrders]
+  );
+
+  useEffect(() => {
+    if (user || !guestTrackIdsKey) return;
+    const ids = guestTrackIdsKey.split(',').filter((id) => id.length >= 18);
+    const unsubs = ids.map((id) =>
+      onSnapshot(
+        doc(db, 'orderStatus', id),
+        (snap) => {
+          if (!snap.exists()) return;
+          const mirror = snap.data() as {
+            status?: OrderStatus;
+            estimatedMinutes?: number;
+            paymentStatus?: PaymentStatus;
+            updatedAt?: { seconds: number; nanoseconds: number } | null;
+          };
+          setGuestOrders((prev) =>
+            prev.map((existingOrder) => {
+              if (existingOrder.id !== id) return existingOrder;
+              if (
+                mirror.status &&
+                mirror.status !== existingOrder.status
+              ) {
+                const title = `Order ${existingOrder.orderNumber}: ${mirror.status}`;
+                const body = `Your Suman Cold Coffee Depot order is now ${mirror.status}.`;
+                showToast(title, body);
+                dispatchBrowserPush(title, body, id);
+              }
+              return {
+                ...existingOrder,
+                status: mirror.status || existingOrder.status,
+                estimatedMinutes:
+                  typeof mirror.estimatedMinutes === 'number'
+                    ? mirror.estimatedMinutes
+                    : existingOrder.estimatedMinutes,
+                paymentStatus: mirror.paymentStatus || existingOrder.paymentStatus,
+                updatedAt: mirror.updatedAt || existingOrder.updatedAt,
+              };
+            })
+          );
+        },
+        () => {
+          // Ignore status lookup misses for legacy orders
+        }
+      )
+    );
+    return () => {
+      for (const unsub of unsubs) unsub();
+    };
+  }, [user, guestTrackIdsKey]);
 
   useEffect(() => {
     const menuRef = collection(db, 'menuItems');
@@ -451,9 +599,9 @@ function DepotApp() {
   }, [selectedCategory, filteredMenu]);
 
   const myOrders = useMemo(() => {
-    if (!user) return [];
+    if (!user) return guestOrders;
     return orders.filter((o) => o.userId === user.uid);
-  }, [orders, user]);
+  }, [orders, user, guestOrders]);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -612,6 +760,15 @@ function DepotApp() {
     );
   }
 
+  function handleSaveGuestDetails(details: GuestCustomerDetails) {
+    setGuestDetails(details);
+    try {
+      localStorage.setItem(GUEST_DETAILS_STORAGE_KEY, JSON.stringify(details));
+    } catch {
+      // Ignore storage error
+    }
+  }
+
   async function handlePlaceOrder(payload: {
     customerName: string;
     customerPhone: string;
@@ -627,9 +784,8 @@ function DepotApp() {
     totalAmount: number;
     notes: string;
   }) {
-    if (!user) return;
-
-    const orderId = `ord_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
+    const orderUserId = user?.uid || guestId;
+    const orderId = `ord_${Date.now().toString(36)}_${randomAlnum(12)}`;
     const orderNumber = `SCCD-${Math.floor(1000 + Math.random() * 9000)}`;
     const estimatedMinutes = Math.max(
       12,
@@ -638,7 +794,7 @@ function DepotApp() {
 
     const orderPayload = {
       orderNumber,
-      userId: user.uid,
+      userId: orderUserId,
       customerName: payload.customerName,
       customerPhone: payload.customerPhone,
       deliveryType: payload.deliveryType,
@@ -658,20 +814,78 @@ function DepotApp() {
       updatedAt: serverTimestamp(),
     };
 
-    try {
-      await setDoc(doc(db, 'orders', orderId), orderPayload);
+    const itemsSummary = payload.verifiedItems
+      .slice(0, 20)
+      .map((i) => `${i.quantity}x ${i.name}${i.size && i.size !== 'Regular' ? ` (${i.size})` : ''}`)
+      .join(', ')
+      .slice(0, 240);
 
-      const notifId = `notif_${Date.now().toString(36)}`;
-      await setDoc(doc(db, 'users', user.uid, 'notifications', notifId), {
-        id: notifId,
-        userId: user.uid,
-        orderId,
-        title: `Order ${orderNumber} Confirmed`,
-        message: `${payload.paymentStatus} via ${payload.paymentMethod} (${payload.paymentReference}). Estimated ${estimatedMinutes} mins.`,
-        type: 'order_placed',
-        read: false,
-        createdAt: serverTimestamp(),
-      });
+    const statusMirrorPayload = {
+      orderId,
+      orderNumber,
+      status: 'Placed' as OrderStatus,
+      estimatedMinutes,
+      deliveryType: payload.deliveryType,
+      paymentMethod: payload.paymentMethod,
+      paymentStatus: payload.paymentStatus,
+      totalAmount: payload.totalAmount,
+      itemsSummary: itemsSummary || 'Cafe Order',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+
+    try {
+      const batch = writeBatch(db);
+      batch.set(doc(db, 'orders', orderId), orderPayload);
+      batch.set(doc(db, 'orderStatus', orderId), statusMirrorPayload);
+      await batch.commit();
+
+      if (user && isAdmin) {
+        const notifId = `notif_${Date.now().toString(36)}`;
+        await setDoc(doc(db, 'users', user.uid, 'notifications', notifId), {
+          id: notifId,
+          userId: user.uid,
+          orderId,
+          title: `Order ${orderNumber} Confirmed`,
+          message: `${payload.paymentStatus} via ${payload.paymentMethod} (${payload.paymentReference}). Estimated ${estimatedMinutes} mins.`,
+          type: 'order_placed',
+          read: false,
+          createdAt: serverTimestamp(),
+        });
+      } else {
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const localGuestOrder: Order = {
+          id: orderId,
+          orderNumber,
+          userId: orderUserId,
+          customerName: payload.customerName,
+          customerPhone: payload.customerPhone,
+          deliveryType: payload.deliveryType,
+          deliveryAddress: payload.deliveryAddress,
+          items: payload.verifiedItems.slice(0, 20),
+          subtotal: payload.subtotal,
+          tax: payload.tax,
+          deliveryFee: payload.deliveryFee,
+          totalAmount: payload.totalAmount,
+          paymentMethod: payload.paymentMethod,
+          paymentStatus: payload.paymentStatus,
+          paymentReference: payload.paymentReference,
+          status: 'Placed',
+          estimatedMinutes,
+          notes: payload.notes,
+          createdAt: { seconds: nowSeconds, nanoseconds: 0 },
+          updatedAt: { seconds: nowSeconds, nanoseconds: 0 },
+        };
+        setGuestOrders((prev) => [localGuestOrder, ...prev].slice(0, 25));
+        handleSaveGuestDetails({
+          displayName: payload.customerName,
+          phone: payload.customerPhone,
+          deliveryAddress:
+            payload.deliveryType === 'Delivery'
+              ? payload.deliveryAddress
+              : guestDetails.deliveryAddress,
+        });
+      }
 
       setCart([]);
       setCartOpen(false);
@@ -689,34 +903,36 @@ function DepotApp() {
         );
       }
 
-      user
-        .getIdToken()
-        .then((idToken) =>
-          fetch('/api/orders/notify-manager', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${idToken}`,
-            },
-            body: JSON.stringify({
-              orderId,
-              orderNumber,
-              status: 'Placed',
-              customerName: payload.customerName,
-              customerPhone: payload.customerPhone,
-              deliveryType: payload.deliveryType,
-              deliveryAddress: payload.deliveryAddress,
-              paymentMethod: payload.paymentMethod,
-              paymentStatus: payload.paymentStatus,
-              paymentReference: payload.paymentReference,
-              totalAmount: payload.totalAmount,
-              estimatedMinutes,
-              notes: payload.notes,
-              items: payload.verifiedItems.slice(0, 20),
-            }),
-          })
-        )
-        .catch(() => {});
+      const sendManagerAlert = async () => {
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json',
+        };
+        if (user) {
+          const idToken = await user.getIdToken();
+          headers.Authorization = `Bearer ${idToken}`;
+        }
+        await fetch('/api/orders/notify-manager', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            orderId,
+            orderNumber,
+            status: 'Placed',
+            customerName: payload.customerName,
+            customerPhone: payload.customerPhone,
+            deliveryType: payload.deliveryType,
+            deliveryAddress: payload.deliveryAddress,
+            paymentMethod: payload.paymentMethod,
+            paymentStatus: payload.paymentStatus,
+            paymentReference: payload.paymentReference,
+            totalAmount: payload.totalAmount,
+            estimatedMinutes,
+            notes: payload.notes,
+            items: payload.verifiedItems.slice(0, 20),
+          }),
+        });
+      };
+      sendManagerAlert().catch(() => {});
     } catch (err) {
       handleFirestoreError(err, OperationType.CREATE, `orders/${orderId}`);
     }
@@ -729,6 +945,10 @@ function DepotApp() {
         status: 'Cancelled',
         updatedAt: serverTimestamp(),
       });
+      updateDoc(doc(db, 'orderStatus', order.id), {
+        status: 'Cancelled',
+        updatedAt: serverTimestamp(),
+      }).catch(() => {});
       showToast(`Order ${order.orderNumber} Cancelled`, 'Your order has been cancelled.');
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `orders/${order.id}`);
@@ -801,26 +1021,37 @@ function DepotApp() {
       Cancelled: 1,
     };
 
+    const nextPaymentStatus: PaymentStatus =
+      nextStatus === 'Delivered' ? 'Paid' : order.paymentStatus;
+
     try {
       await updateDoc(doc(db, 'orders', order.id), {
         status: nextStatus,
         estimatedMinutes: etaByStatus[nextStatus],
-        paymentStatus:
-          nextStatus === 'Delivered' ? 'Paid' : order.paymentStatus,
+        paymentStatus: nextPaymentStatus,
         updatedAt: serverTimestamp(),
       });
 
-      const notifId = `notif_${Date.now().toString(36)}`;
-      await setDoc(doc(db, 'users', order.userId, 'notifications', notifId), {
-        id: notifId,
-        userId: order.userId,
-        orderId: order.id,
-        title: `Order ${order.orderNumber} · ${nextStatus}`,
-        message: `Your order status updated to ${nextStatus}.`,
-        type: 'status_update',
-        read: false,
-        createdAt: serverTimestamp(),
-      });
+      updateDoc(doc(db, 'orderStatus', order.id), {
+        status: nextStatus,
+        estimatedMinutes: etaByStatus[nextStatus],
+        paymentStatus: nextPaymentStatus,
+        updatedAt: serverTimestamp(),
+      }).catch(() => {});
+
+      if (!order.userId.startsWith('guest_')) {
+        const notifId = `notif_${Date.now().toString(36)}`;
+        setDoc(doc(db, 'users', order.userId, 'notifications', notifId), {
+          id: notifId,
+          userId: order.userId,
+          orderId: order.id,
+          title: `Order ${order.orderNumber} · ${nextStatus}`,
+          message: `Your order status updated to ${nextStatus}.`,
+          type: 'status_update',
+          read: false,
+          createdAt: serverTimestamp(),
+        }).catch(() => {});
+      }
 
       showToast(`Updated ${order.orderNumber}`, `Status set to ${nextStatus}`);
     } catch (err) {
@@ -835,6 +1066,10 @@ function DepotApp() {
         paymentStatus: 'Paid',
         updatedAt: serverTimestamp(),
       });
+      updateDoc(doc(db, 'orderStatus', order.id), {
+        paymentStatus: 'Paid',
+        updatedAt: serverTimestamp(),
+      }).catch(() => {});
       showToast(`Payment Recorded`, `${order.orderNumber} marked as Paid.`);
     } catch (err) {
       handleFirestoreError(err, OperationType.UPDATE, `orders/${order.id}`);
@@ -972,23 +1207,13 @@ function DepotApp() {
                     >
                       Order From Menu ({menuItems.length})
                     </a>
-                    {user ? (
-                      <button
-                        type="button"
-                        onClick={() => setActiveView('tracker')}
-                        className="px-5 py-3 min-h-[44px] inline-flex items-center text-sm font-medium border border-zinc-300 bg-white text-zinc-900 rounded-lg hover:bg-zinc-50 transition-colors cursor-pointer"
-                      >
-                        Track Live Orders ({myOrders.length})
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={handleSignIn}
-                        className="px-5 py-3 min-h-[44px] inline-flex items-center text-sm font-medium border border-zinc-300 bg-white text-zinc-900 rounded-lg hover:bg-zinc-50 transition-colors cursor-pointer"
-                      >
-                        Sign in with Google
-                      </button>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => setActiveView('tracker')}
+                      className="px-5 py-3 min-h-[44px] inline-flex items-center text-sm font-medium border border-zinc-300 bg-white text-zinc-900 rounded-lg hover:bg-zinc-50 transition-colors cursor-pointer"
+                    >
+                      Track Live Orders{myOrders.length > 0 ? ` (${myOrders.length})` : ''}
+                    </button>
                     <button
                       type="button"
                       onClick={() => setQrModalOpen(true)}
@@ -1104,7 +1329,6 @@ function DepotApp() {
             selectedOrderId={selectedOrderId}
             onSelectOrder={setSelectedOrderId}
             onCancelOrder={handleCancelOrder}
-            onSignIn={handleSignIn}
             onBrowseMenu={() => setActiveView('menu')}
             pushOptIn={profile?.pushOptIn ?? false}
             browserPushStatus={browserPushStatus}
@@ -1116,12 +1340,13 @@ function DepotApp() {
           <ProfileView
             user={user}
             profile={profile}
+            guestDetails={guestDetails}
             orders={myOrders}
             notifications={notifications}
             browserPushStatus={browserPushStatus}
-            onSignIn={handleSignIn}
             onSignOut={handleSignOut}
             onSaveProfile={handleSaveProfile}
+            onSaveGuestDetails={handleSaveGuestDetails}
             onMarkNotificationRead={handleMarkNotificationRead}
             onEnableBrowserPush={handleEnablePush}
             onReorder={handleReorder}
@@ -1144,6 +1369,7 @@ function DepotApp() {
             onEnablePush={handleEnablePush}
             onToggleSoundAlerts={handleToggleSoundAlerts}
             onSignIn={handleSignIn}
+            onSignOut={handleSignOut}
             onAdvanceOrderStatus={handleAdvanceOrderStatus}
             onMarkCodPaid={handleMarkCodPaid}
             onSeedMenu={handleSeedMenu}
@@ -1179,14 +1405,14 @@ function DepotApp() {
               onClick={() => setActiveView('profile')}
               className="hover:text-zinc-950 cursor-pointer"
             >
-              Account
+              My Orders
             </button>
             <button
               type="button"
               onClick={() => setActiveView('kitchen')}
               className="hover:text-zinc-950 cursor-pointer"
             >
-              Kitchen Console
+              Manager Console
             </button>
             <button
               type="button"
@@ -1214,11 +1440,11 @@ function DepotApp() {
         items={cart}
         user={user}
         profile={profile}
+        guestDetails={guestDetails}
         defaultDeliveryType={defaultDeliveryType}
         onClose={() => setCartOpen(false)}
         onUpdateQty={handleUpdateCartQty}
         onRemoveItem={handleRemoveCartItem}
-        onSignIn={handleSignIn}
         onPlaceOrder={handlePlaceOrder}
       />
 

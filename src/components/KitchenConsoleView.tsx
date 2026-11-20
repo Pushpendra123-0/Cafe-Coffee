@@ -41,6 +41,7 @@ interface KitchenConsoleViewProps {
   onEnablePush: () => Promise<void>;
   onToggleSoundAlerts: () => void;
   onSignIn: () => Promise<void>;
+  onSignOut: () => Promise<void>;
   onAdvanceOrderStatus: (order: Order, nextStatus: OrderStatus) => Promise<void>;
   onMarkCodPaid: (order: Order) => Promise<void>;
   onSeedMenu: () => Promise<void>;
@@ -297,6 +298,7 @@ export function KitchenConsoleView({
   onEnablePush,
   onToggleSoundAlerts,
   onSignIn,
+  onSignOut,
   onAdvanceOrderStatus,
   onMarkCodPaid,
   onSeedMenu,
@@ -431,17 +433,17 @@ export function KitchenConsoleView({
       <section className="max-w-4xl mx-auto px-4 sm:px-6 py-16">
         <div className="bg-white border border-zinc-200 rounded-xl p-10 text-center">
           <h1 className="font-display text-3xl font-semibold text-zinc-950 mb-3">
-            Depot Kitchen, Orders & Payments Console
+            Depot Manager Sign-In Only
           </h1>
           <p className="text-sm text-zinc-600 max-w-md mx-auto mb-6 leading-relaxed">
-            Sign in with your Depot Manager account ({BOOTSTRAPPED_ADMIN_EMAIL}) to view every customer&apos;s ordered items, payment references, and manage your live menu.
+            Customers do not need to sign in to order. Sign in here with the Depot Manager account ({BOOTSTRAPPED_ADMIN_EMAIL}) to manage live orders, payments, and the cafe menu.
           </p>
           <button
             type="button"
             onClick={onSignIn}
             className="px-5 py-2.5 min-h-[44px] text-sm font-medium bg-zinc-950 text-white rounded-lg hover:bg-zinc-800 cursor-pointer"
           >
-            Sign in with Google
+            Manager Sign in with Google
           </button>
         </div>
       </section>
@@ -457,11 +459,18 @@ export function KitchenConsoleView({
             <span className="text-xs font-medium">Role-Based Access Control</span>
           </div>
           <h1 className="font-display text-2xl font-semibold text-zinc-950">
-            Barista & Admin Authorization Required
+            Depot Manager Authorization Required
           </h1>
           <p className="text-sm text-zinc-600 leading-relaxed">
-            Signed in as <span className="font-mono">{user.email}</span>. Customer order fulfillment, payment ledgers, and cloud menu management are restricted by Firestore security rules to the Depot Manager ({BOOTSTRAPPED_ADMIN_EMAIL}).
+            Signed in as <span className="font-mono">{user.email}</span>. Customer order fulfillment, payment ledgers, and cloud menu management are restricted exclusively to the Depot Manager ({BOOTSTRAPPED_ADMIN_EMAIL}).
           </p>
+          <button
+            type="button"
+            onClick={onSignOut}
+            className="px-4 py-2 text-xs font-medium border border-zinc-300 bg-white text-zinc-900 rounded-lg hover:bg-zinc-50 cursor-pointer"
+          >
+            Sign Out
+          </button>
         </div>
       </section>
     );
